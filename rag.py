@@ -43,19 +43,32 @@ def create_db():
     return db
 
 
-def main(pdf_path: str):
-    md_text = pymupdf4llm.to_markdown(pdf_path)
-    splitter = MarkdownSplitter(1000)
-    chunks = splitter.chunks(md_text)
+def search(db, query: str):
+    results = db.execute(
+        "select rowid, chunk, rank from fts_chunks where chunk match ? order by rank limit 5",
+        (query,),
+    )
+    return results.fetchall()
 
+
+def main(action: str, action_object: str):
     db = create_db()
 
-    for i, chunk in enumerate(chunks):
-        db.execute(
-            "insert into chunks(document, chunk_id, chunk) values (?, ?, ?)",
-            (pdf_path, i, chunk),
-        )
-    db.commit()
+    if action == "index":
+        md_text = pymupdf4llm.to_markdown(action_object)
+        splitter = MarkdownSplitter(1000)
+        chunks = splitter.chunks(md_text)
+
+        for i, chunk in enumerate(chunks):
+            db.execute(
+                "insert into chunks(document, chunk_id, chunk) values (?, ?, ?)",
+                (action_object, i, chunk),
+            )
+        db.commit()
+
+    if action == "search":
+        top_results = search(db, action_object)
+        print(top_results)
 
 
 if __name__ == "__main__":
