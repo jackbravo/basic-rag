@@ -1,0 +1,7 @@
+[project]
+name = "rag-challenge"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["pymupdf4llm>=0.0.17", "typer>=0.15.1"]
