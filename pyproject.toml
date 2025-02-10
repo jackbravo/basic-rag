@@ -4,4 +4,25 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["pymupdf4llm>=0.0.17", "typer>=0.15.1"]
+dependencies = [
+    "pymupdf4llm>=0.0.17",
+    "semantic-text-splitter>=0.23.0",
+    "typer>=0.15.1",
+]
+
+
+[tool.ruff]
+# Same as Black.
+line-length = 88
+indent-width = 4
+
+[tool.ruff.lint]
+# sort imports
+extend-select = ["I"]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+
+[dependency-groups]
+dev = ["ruff>=0.9.6"]
