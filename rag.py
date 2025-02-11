@@ -77,6 +77,9 @@ def create_db():
 
 
 def search(db, query: str):
+    # make words separated by ' OR ' to search for any of them
+    # e.g. "hello world" -> "hello OR world"
+    query = " OR ".join(query.split())
     results = db.execute(
         """select rowid, document, chunk, rank
         from fts_chunks where chunk match ? order by rank limit 5""",
@@ -85,9 +88,9 @@ def search(db, query: str):
     return results.fetchall()
 
 
-def llm_complete(db, context_search: str, question: str):
+def llm_complete(db, question: str):
     messages = [{"role": "system", "content": RAG_PROMPT}]
-    rag_context = search(db, context_search)
+    rag_context = search(db, question)
     for row in rag_context:
         messages.append(
             {
@@ -121,8 +124,7 @@ def main(action: str, action_object: str):
         print(top_results)
 
     elif action == "chat":
-        question = input("Ask me a question: ")
-        llm_complete(db, action_object, question)
+        llm_complete(db, action_object)
 
 
 if __name__ == "__main__":
