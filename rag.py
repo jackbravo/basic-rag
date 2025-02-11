@@ -1,7 +1,14 @@
+import os
+
 import pymupdf4llm
 import typer
+from litellm import completion
 from pysqlite3 import dbapi2 as sqlite3
 from semantic_text_splitter import MarkdownSplitter
+
+DEFAULT_MODEL = os.environ.get(
+    "LLM_MODEL", "gemini/gemini-2.0-flash-lite-preview-02-05"
+)
 
 
 def create_db():
@@ -49,6 +56,13 @@ def search(db, query: str):
         (query,),
     )
     return results.fetchall()
+
+
+def llm_complete(text: str):
+    messages = [{"content": "Hello, how are you?", "role": "user"}]
+    response = completion(model=DEFAULT_MODEL, messages=messages, stream=True)
+    for part in response:
+        print(part.choices[0].delta.content or "")
 
 
 def main(action: str, action_object: str):
