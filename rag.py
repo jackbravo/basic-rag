@@ -3,6 +3,7 @@ import os
 import pymupdf4llm
 import typer
 from litellm import completion
+from prettytable import PrettyTable
 from pysqlite3 import dbapi2 as sqlite3
 from semantic_text_splitter import MarkdownSplitter
 
@@ -121,7 +122,13 @@ def main(action: str, action_object: str):
 
     elif action == "search":
         top_results = search(db, action_object)
-        print(top_results)
+        table = PrettyTable()
+        table.field_names = ["id", "document", "chunk", "rank"]
+        table.align = "l"
+        # pretty print results
+        for row in top_results:
+            table.add_row(row)
+        print(table)
 
     elif action == "chat":
         llm_complete(db, action_object)
