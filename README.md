@@ -14,31 +14,45 @@ The script `rag.py` implements a RAG workflow which:
 ## Usage
 
 ### Index a PDF File
+
+This will also create a FULL TEXT index for the document using fts5 sqlite extension.
+
 ```bash
 uv run rag.py index ./AI\ Engineer-Lead\ -\ Anexo.pdf
 ```
 
 ### Index Embeddings
+
+This will create an EMBEDDINGS index for the document, in a separate table.
+This needs to be run after `index`.
+It deletes all data on the embeddings table before indexing again.
+
+We are using `jinaai/jina-embeddings-v3` as embedding model, which is multilingual, it has a cc-nc (non-comercial) license.
+
 ```bash
 uv run rag.py index-embeddings
 ```
 
-### Display Help
-```bash
-uv run rag.py --help
-```
-
 ### Search Using Full-Text
+
+Words are separated by OR when sending the `match` query to SQLite, so the search is for any of the words in the query.
+
 ```bash
-uv run rag.py search "Como funciona o programa de recompensas"
+uv run rag.py search "A question using full text search"
 ```
 
 ### Search Using Embeddings
+
 ```bash
-uv run rag.py search-embeddings "Como funciona o programa de recompensas"
+uv run rag.py search-embeddings "The top results of a question using embeddings"
 ```
 
 ### Chat Mode
+
+This will use the top results from the search to answer questions using an LLM.
+You need to set the `LLM_MODEL` environment variable to something like `gemini/gemini-2.0-flash-lite-preview-02-05`
+and the appropriate key using [litellm](https://github.com/BerriAI/litellm), like `GEMINI_API_KEY`.
+
 ```bash
 uv run rag.py chat "Como funciona o programa de recompensas"
 ```
