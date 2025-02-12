@@ -6,6 +6,10 @@ from litellm import completion
 from prettytable import PrettyTable
 from pysqlite3 import dbapi2 as sqlite3
 from semantic_text_splitter import MarkdownSplitter
+from sentence_transformers import SentenceTransformer
+from sqlite_vec import load, serialize_float32
+from tqdm import tqdm
+from typing_extensions import Annotated
 
 DEFAULT_MODEL = os.environ.get(
     "LLM_MODEL", "gemini/gemini-2.0-flash-lite-preview-02-05"
@@ -40,6 +44,9 @@ RAG_ITEM = """
 
 def create_db():
     db = sqlite3.connect("./db.sqlite")
+    db.enable_load_extension(True)
+    load(db)
+    db.enable_load_extension(False)
     db.execute("""
         create table if not exists chunks (
             id integer primary key,
@@ -74,7 +81,43 @@ def create_db():
         end;
     """)
 
+    db.execute("""
+        create table if not exists chunks_embeddings (
+            id integer primary key,
+            embedding float[1024]
+                check(
+                    typeof(embedding) == 'blob'
+                    and vec_length(embedding) == 1024
+                )
+        )
+    """)
+
     return db
+
+
+def get_model():
+    return SentenceTransformer("jinaai/jina-embeddings-v3", trust_remote_code=True)
+
+
+def embeddings_index(db):
+    print("Deleting existing embeddings...")
+    db.execute("DELETE FROM chunks_embeddings")
+
+    print("Initializing model...")
+    model = get_model()
+
+    results = db.execute("SELECT id, chunk FROM chunks").fetchall()
+    for id, chunk in tqdm(results, desc="Indexing embeddings"):
+        task = "retrieval.passage"
+        embeddings = model.encode(chunk, task=task, prompt_name=task).tolist()
+        db.execute(
+            "INSERT INTO chunks_embeddings(id, embedding) VALUES (?, ?)",
+            (
+                id,
+                serialize_float32(embeddings),
+            ),
+        )
+    db.commit()
 
 
 def search(db, query: str):
@@ -87,6 +130,22 @@ def search(db, query: str):
         (query,),
     )
     return results.fetchall()
+
+
+def search_embeddings(db, query: str):
+    print("Initializing model...")
+    model = get_model()
+    task = "retrieval.query"
+    embeddings = model.encode(query, task=task, prompt_name=task).tolist()
+
+    sql = """
+        SELECT c.id, c.document, c.chunk, vec_distance_L2(e.embedding, ?) as distance
+        FROM chunks_embeddings e
+        LEFT JOIN chunks c USING (id)
+        ORDER BY distance
+        LIMIT 5
+    """
+    return db.execute(sql, (serialize_float32(embeddings),)).fetchall()
 
 
 def llm_complete(db, question: str):
@@ -105,7 +164,16 @@ def llm_complete(db, question: str):
         print(part.choices[0].delta.content or "")
 
 
-def main(action: str, action_object: str):
+def print_results(results):
+    table = PrettyTable()
+    table.field_names = ["id", "document", "chunk", "rank"]
+    table.align = "l"
+    for row in results:
+        table.add_row(row)
+    print(table)
+
+
+def main(action: str, action_object: Annotated[str | None, typer.Argument()] = None):
     db = create_db()
 
     if action == "index":
@@ -120,17 +188,24 @@ def main(action: str, action_object: str):
             )
         db.commit()
 
+    if action == "index-embeddings":
+        embeddings_index(db)
+
     elif action == "search":
+        if action_object is None:
+            raise ValueError("Please provide a query to search for.")
         top_results = search(db, action_object)
-        table = PrettyTable()
-        table.field_names = ["id", "document", "chunk", "rank"]
-        table.align = "l"
-        # pretty print results
-        for row in top_results:
-            table.add_row(row)
-        print(table)
+        print_results(top_results)
+
+    elif action == "search-embeddings":
+        if action_object is None:
+            raise ValueError("Please provide a query to search for.")
+        top_results = search_embeddings(db, action_object)
+        print_results(top_results)
 
     elif action == "chat":
+        if action_object is None:
+            raise ValueError("Please add a question.")
         llm_complete(db, action_object)
 
 
