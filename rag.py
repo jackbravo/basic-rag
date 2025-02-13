@@ -183,6 +183,9 @@ def print_results(results):
 def main(action: str, action_object: Annotated[str | None, typer.Argument()] = None):
     db = create_db()
 
+    if action == "markdown":
+        print(pymupdf4llm.to_markdown(action_object))
+
     if action == "index":
         md_text = pymupdf4llm.to_markdown(action_object)
         splitter = MarkdownSplitter(1000)
