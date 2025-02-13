@@ -11,6 +11,7 @@ from sqlite_vec import load, serialize_float32
 from tqdm import tqdm
 from typing_extensions import Annotated
 
+LIMIT = 5
 DEFAULT_MODEL = os.environ.get(
     "LLM_MODEL", "gemini/gemini-2.0-flash-lite-preview-02-05"
 )
@@ -120,30 +121,30 @@ def embeddings_index(db):
     db.commit()
 
 
-def search(db, query: str):
+def search(db, query: str, limit: int = LIMIT):
     # make words separated by ' OR ' to search for any of them
     # e.g. "hello world" -> "hello OR world"
     query = " OR ".join(query.split())
     results = db.execute(
-        """select rowid, document, chunk, rank
-        from fts_chunks where chunk match ? order by rank limit 5""",
+        f"""select rowid, document, chunk, rank
+        from fts_chunks where chunk match ? order by rank limit {limit}""",
         (query,),
     )
     return results.fetchall()
 
 
-def search_embeddings(db, query: str):
+def search_embeddings(db, query: str, limit: int = LIMIT):
     print("Initializing model...")
     model = get_model()
     task = "retrieval.query"
     embeddings = model.encode(query, task=task, prompt_name=task).tolist()
 
-    sql = """
+    sql = f"""
         SELECT c.id, c.document, c.chunk, vec_distance_L2(e.embedding, ?) as distance
         FROM chunks_embeddings e
         LEFT JOIN chunks c USING (id)
         ORDER BY distance
-        LIMIT 5
+        LIMIT {limit}
     """
     return db.execute(sql, (serialize_float32(embeddings),)).fetchall()
 
