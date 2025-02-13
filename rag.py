@@ -15,6 +15,7 @@ LIMIT = 5
 DEFAULT_MODEL = os.environ.get(
     "LLM_MODEL", "gemini/gemini-2.0-flash-lite-preview-02-05"
 )
+_cached_model = None
 
 RAG_PROMPT = """
 You are a helpful assistant.
@@ -97,7 +98,12 @@ def create_db():
 
 
 def get_model():
-    return SentenceTransformer("jinaai/jina-embeddings-v3", trust_remote_code=True)
+    global _cached_model
+    if _cached_model is None:
+        _cached_model = SentenceTransformer(
+            "jinaai/jina-embeddings-v3", trust_remote_code=True
+        )
+    return _cached_model
 
 
 def embeddings_index(db):
