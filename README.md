@@ -13,6 +13,15 @@ The script `rag.py` implements a RAG workflow which:
 
 ## Usage
 
+## Installation
+
+Install [uv](https://docs.astral.sh/uv/) package manager and run:
+
+```bash
+uv venv # to create a virtual environment
+uv sync # to install (sync) all dependencies
+```
+
 ### Index a PDF File
 
 This will also create a FULL TEXT index for the document using fts5 sqlite extension.
