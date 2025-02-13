@@ -48,6 +48,7 @@ def run_test(query: str):
         print(f"ID: {row[0]}, Rank: {row[3]}")
         print(row[2])
         print("-" * 20)
+    print(f"FTS Search Time: {fts_time:.6f} seconds")
 
     start_emb = time.perf_counter()
     results_emb = search_embeddings(db, query, LIMIT)
@@ -57,7 +58,7 @@ def run_test(query: str):
         print(f"ID: {row[0]}, Rank: {row[3]}")
         print(row[2])
         print("-" * 20)
-
+    print(f"Embeddings Search Time: {emb_time:.6f} seconds")
     def check_results(results):
         for i, row in enumerate(results):
             if expected in row[2]:
