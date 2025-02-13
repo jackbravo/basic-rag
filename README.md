@@ -71,6 +71,14 @@ uv run rag.py chat "Como funciona o programa de recompensas"
 - Python 3.8+
 - Dependencies as specified in `pyproject.toml`
 
+## Tests
+
+To run tests, execute the following command:
+
+```bash
+uv run test_rag_compare.py
+```
+
 ## License
 
 This project is open source.
