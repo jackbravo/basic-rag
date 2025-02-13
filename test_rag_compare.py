@@ -8,6 +8,7 @@ and compares whether the ideal expected extract is included in the results.
 from prettytable import PrettyTable
 from pysqlite3 import dbapi2 as sqlite3
 from sqlite_vec import load
+import time
 
 from rag import search, search_embeddings
 
@@ -39,14 +40,19 @@ def run_test(query: str):
     print("Ideal Expected Extract:")
     print(expected)
     print("\nFTS Results:")
+    start_fts = time.perf_counter()
     results_fts = search(db, query, LIMIT)
+    end_fts = time.perf_counter()
+    fts_time = end_fts - start_fts
     for row in results_fts:
         print(f"ID: {row[0]}, Rank: {row[3]}")
         print(row[2])
         print("-" * 20)
 
-    print("\nEmbeddings Results:")
+    start_emb = time.perf_counter()
     results_emb = search_embeddings(db, query, LIMIT)
+    end_emb = time.perf_counter()
+    emb_time = end_emb - start_emb
     for row in results_emb:
         print(f"ID: {row[0]}, Rank: {row[3]}")
         print(row[2])
@@ -72,19 +78,23 @@ def run_test(query: str):
     print("\nTest result:")
     print(summary)
     print("=" * 40, "\n")
-    return [fts_match, emb_match]
+    return [fts_match, emb_match, fts_time, emb_time]
 
 
 def main() -> None:
     fts_total = 0
     emb_total = 0
+    fts_time_total = 0
+    emb_time_total = 0
     table = PrettyTable()
-    table.field_names = ["Query", "FTS", "Embeddings"]
+    table.field_names = ["Query", "FTS", "Embeddings", "FTS Time (s)", "Embeddings Time (s)"]
     for query in expected_responses.keys():
-        fts_i, emb_i = run_test(query)
+        fts_i, emb_i, fts_time, emb_time = run_test(query)
         fts_total += fts_i
         emb_total += emb_i
-        table.add_row([query, fts_i, emb_i])
+        fts_time_total += fts_time
+        emb_time_total += emb_time
+        table.add_row([query, fts_i, emb_i, f"{fts_time:.6f}", f"{emb_time:.6f}"])
 
     # print summary
     print("Summary:")
@@ -93,6 +103,7 @@ def main() -> None:
     )
     print(table)
     print(f"FTS total: {fts_total}, Embeddings total: {emb_total}. LESS IS MORE")
+    print(f"Total FTS Search Time: {fts_time_total:.6f} seconds, Total Embeddings Search Time: {emb_time_total:.6f} seconds")
 
 
 if __name__ == "__main__":
