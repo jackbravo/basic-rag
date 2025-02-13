@@ -5,10 +5,11 @@ For each query, the script prints an ideal expected extract, displays the search
 and compares whether the ideal expected extract is included in the results.
 """
 
+import time
+
 from prettytable import PrettyTable
 from pysqlite3 import dbapi2 as sqlite3
 from sqlite_vec import load
-import time
 
 from rag import search, search_embeddings
 
@@ -39,26 +40,16 @@ def run_test(query: str):
     expected = expected_responses.get(query, "No expected response defined.")
     print("Ideal Expected Extract:")
     print(expected)
-    print("\nFTS Results:")
     start_fts = time.perf_counter()
     results_fts = search(db, query, LIMIT)
     end_fts = time.perf_counter()
     fts_time = end_fts - start_fts
-    for row in results_fts:
-        print(f"ID: {row[0]}, Rank: {row[3]}")
-        print(row[2])
-        print("-" * 20)
-    print(f"FTS Search Time: {fts_time:.6f} seconds")
 
     start_emb = time.perf_counter()
     results_emb = search_embeddings(db, query, LIMIT)
     end_emb = time.perf_counter()
     emb_time = end_emb - start_emb
-    for row in results_emb:
-        print(f"ID: {row[0]}, Rank: {row[3]}")
-        print(row[2])
-        print("-" * 20)
-    print(f"Embeddings Search Time: {emb_time:.6f} seconds")
+
     def check_results(results):
         for i, row in enumerate(results):
             if expected in row[2]:
@@ -88,7 +79,13 @@ def main() -> None:
     fts_time_total = 0
     emb_time_total = 0
     table = PrettyTable()
-    table.field_names = ["Query", "FTS", "Embeddings", "FTS Time (s)", "Embeddings Time (s)"]
+    table.field_names = [
+        "Query",
+        "FTS",
+        "Embeddings",
+        "FTS Time (s)",
+        "Embeddings Time (s)",
+    ]
     for query in expected_responses.keys():
         fts_i, emb_i, fts_time, emb_time = run_test(query)
         fts_total += fts_i
@@ -104,7 +101,9 @@ def main() -> None:
     )
     print(table)
     print(f"FTS total: {fts_total}, Embeddings total: {emb_total}. LESS IS MORE")
-    print(f"Total FTS Search Time: {fts_time_total:.6f} seconds, Total Embeddings Search Time: {emb_time_total:.6f} seconds")
+    print(
+        f"Total FTS Search Time: {fts_time_total:.6f} seconds, Total Embeddings Search Time: {emb_time_total:.6f} seconds"
+    )
 
 
 if __name__ == "__main__":
