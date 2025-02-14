@@ -10,6 +10,7 @@ dependencies = [
     "prettytable>=3.14.0",
     "pymupdf4llm>=0.0.17",
     "pysqlite3>=0.5.4",
+    "rerankers[transformers]>=0.7.1",
     "semantic-text-splitter>=0.23.0",
     "sentence-transformers>=3.4.1",
     "sqlite-vec>=0.1.6",
