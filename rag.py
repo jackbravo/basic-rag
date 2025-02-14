@@ -5,6 +5,8 @@ import typer
 from litellm import completion
 from prettytable import PrettyTable
 from pysqlite3 import dbapi2 as sqlite3
+from rerankers import Document, Reranker
+from rerankers.results import Result
 from semantic_text_splitter import MarkdownSplitter
 from sentence_transformers import SentenceTransformer
 from sqlite_vec import load, serialize_float32
@@ -15,7 +17,12 @@ LIMIT = 5
 DEFAULT_MODEL = os.environ.get(
     "LLM_MODEL", "gemini/gemini-2.0-flash-lite-preview-02-05"
 )
+DEFAULT_RERANKER = os.environ.get(
+    "LLM_RERANKER", "corrius/cross-encoder-mmarco-mMiniLMv2-L12-H384-v1"
+)
+DEFAULT_RER_MODEL_TYPE = os.environ.get("RERANKER_MODEL_TYPE", "cross-encoder")
 _cached_model = None
+_cached_reranker = None
 
 RAG_PROMPT = """
 You are a helpful assistant.
@@ -100,10 +107,20 @@ def create_db():
 def get_model():
     global _cached_model
     if _cached_model is None:
+        print("Initializing model...")
         _cached_model = SentenceTransformer(
             "jinaai/jina-embeddings-v3", trust_remote_code=True
         )
     return _cached_model
+
+
+def get_reranker():
+    global _cached_reranker
+    if _cached_reranker is None:
+        print("Initializing reranker...")
+        print(DEFAULT_RER_MODEL_TYPE)
+        _cached_reranker = Reranker(DEFAULT_RERANKER, model_type=DEFAULT_RER_MODEL_TYPE)
+    return _cached_reranker
 
 
 def embeddings_index(db):
@@ -140,7 +157,6 @@ def search(db, query: str, limit: int = LIMIT):
 
 
 def search_embeddings(db, query: str, limit: int = LIMIT):
-    print("Initializing model...")
     model = get_model()
     task = "retrieval.query"
     embeddings = model.encode(query, task=task, prompt_name=task).tolist()
@@ -153,6 +169,24 @@ def search_embeddings(db, query: str, limit: int = LIMIT):
         LIMIT {limit}
     """
     return db.execute(sql, (serialize_float32(embeddings),)).fetchall()
+
+
+def search_rerank(db, emb_results, query: str, limit: int = LIMIT):
+    docs = [
+        Document(
+            text=doc[2],
+            metadata={"title": doc[1], "id": doc[0]},
+        )
+        for doc in emb_results
+    ]
+    reranker = get_reranker()
+    # error out if ranker is None
+    assert reranker is not None, "Ranker not found"
+    results = reranker.rank(query, docs)
+    top = results.top_k(limit)
+    return [
+        (doc.metadata["id"], doc.metadata["title"], doc.text, doc.score) for doc in top
+    ]
 
 
 def llm_complete(db, question: str):
@@ -173,10 +207,10 @@ def llm_complete(db, question: str):
 
 def print_results(results):
     table = PrettyTable()
-    table.field_names = ["id", "document", "chunk", "rank"]
+    table.field_names = ["id", "document", "rank"]
     table.align = "l"
     for row in results:
-        table.add_row(row)
+        table.add_row([row[0], row[1], row[3]])
     print(table)
 
 
@@ -186,7 +220,7 @@ def main(action: str, action_object: Annotated[str | None, typer.Argument()] = N
     if action == "markdown":
         print(pymupdf4llm.to_markdown(action_object))
 
-    if action == "index":
+    elif action == "index":
         md_text = pymupdf4llm.to_markdown(action_object)
         splitter = MarkdownSplitter(1000)
         chunks = splitter.chunks(md_text)
@@ -198,7 +232,7 @@ def main(action: str, action_object: Annotated[str | None, typer.Argument()] = N
             )
         db.commit()
 
-    if action == "index-embeddings":
+    elif action == "index-embeddings":
         embeddings_index(db)
 
     elif action == "search":
@@ -211,6 +245,13 @@ def main(action: str, action_object: Annotated[str | None, typer.Argument()] = N
         if action_object is None:
             raise ValueError("Please provide a query to search for.")
         top_results = search_embeddings(db, action_object)
+        print_results(top_results)
+
+    elif action == "search-rerank":
+        if action_object is None:
+            raise ValueError("Please provide a query to search for.")
+        emb_results = search_embeddings(db, action_object, LIMIT * 2)
+        top_results = search_rerank(db, emb_results, action_object)
         print_results(top_results)
 
     elif action == "chat":
