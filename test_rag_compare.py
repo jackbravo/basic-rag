@@ -11,7 +11,7 @@ from prettytable import PrettyTable
 from pysqlite3 import dbapi2 as sqlite3
 from sqlite_vec import load
 
-from rag import search, search_embeddings
+from rag import get_model, get_reranker, search, search_embeddings, search_rerank
 
 # Define expected ideal extracts for each query.
 expected_responses = {
@@ -45,10 +45,18 @@ def run_test(query: str):
     end_fts = time.perf_counter()
     fts_time = end_fts - start_fts
 
+    _ = get_model()  # load model to avoid timing it
     start_emb = time.perf_counter()
     results_emb = search_embeddings(db, query, LIMIT)
     end_emb = time.perf_counter()
     emb_time = end_emb - start_emb
+
+    _ = get_reranker()  # load reranker to avoid timing it
+    start_rer = time.perf_counter()
+    tmp_results_emb = search_embeddings(db, query, LIMIT * 2)
+    results_rer = search_rerank(db, tmp_results_emb, query)
+    end_rer = time.perf_counter()
+    rer_time = end_rer - start_rer
 
     def check_results(results):
         for i, row in enumerate(results):
@@ -58,41 +66,50 @@ def run_test(query: str):
 
     fts_match = check_results(results_fts)
     emb_match = check_results(results_emb)
-    summary = f"FTS found on: {fts_match}, Embeddings found on: {emb_match}. "
-    if fts_match < emb_match:
-        summary += "Recommended approach: FTS."
-    elif emb_match < fts_match:
-        summary += "Recommended approach: Embeddings."
-    elif fts_match == emb_match and fts_match < LIMIT:
-        summary += "Both methods work. Consider FTS due to its simplicity."
-    else:
-        summary += "Neither method found the expected extract."
+    rer_match = check_results(results_rer)
+    summary = f"FTS found on: {fts_match}\nEmbeddings found on: {emb_match}\nReranking found on: {rer_match}"
     print("\nTest result:")
     print(summary)
     print("=" * 40, "\n")
-    return [fts_match, emb_match, fts_time, emb_time]
+    return [fts_match, emb_match, rer_match, fts_time, emb_time, rer_time]
 
 
 def main() -> None:
     fts_total = 0
     emb_total = 0
+    rer_total = 0
     fts_time_total = 0
     emb_time_total = 0
+    rer_time_total = 0
     table = PrettyTable()
     table.field_names = [
         "Query",
         "FTS",
         "Embeddings",
+        "Reranker",
         "FTS Time (s)",
         "Embeddings Time (s)",
+        "Reranker Time (s)",
     ]
     for query in expected_responses.keys():
-        fts_i, emb_i, fts_time, emb_time = run_test(query)
+        fts_i, emb_i, rer_i, fts_time, emb_time, rer_time = run_test(query)
         fts_total += fts_i
         emb_total += emb_i
+        rer_total += rer_i
         fts_time_total += fts_time
         emb_time_total += emb_time
-        table.add_row([query, fts_i, emb_i, f"{fts_time:.6f}", f"{emb_time:.6f}"])
+        rer_time_total += rer_time
+        table.add_row(
+            [
+                query,
+                fts_i,
+                emb_i,
+                rer_i,
+                f"{fts_time:.6f}",
+                f"{emb_time:.6f}",
+                f"{rer_time:.6f}",
+            ]
+        )
 
     # print summary
     print("Summary:")
@@ -100,9 +117,11 @@ def main() -> None:
         f"Note. Search limit was {LIMIT}, if you see {LIMIT * 2} it means the expected extract was not found."
     )
     print(table)
-    print(f"FTS total: {fts_total}, Embeddings total: {emb_total}. LESS IS MORE")
     print(
-        f"Total FTS Search Time: {fts_time_total:.6f} seconds, Total Embeddings Search Time: {emb_time_total:.6f} seconds"
+        f"FTS total: {fts_total}, Embeddings total: {emb_total}, Reranker total: {rer_total}. LESS IS MORE"
+    )
+    print(
+        f"Total FTS Search Time: {fts_time_total:.6f} seconds, Total Embeddings Search Time: {emb_time_total:.6f} seconds, Total Reranker Time: {rer_time_total:.6f} seconds"
     )
 
 
